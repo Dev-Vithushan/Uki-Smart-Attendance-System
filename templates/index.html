@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uki Smart Attendance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --secondary: #10B981;
+            --danger: #EF4444;
+            --bg: #F9FAFB;
+            --card: #FFFFFF;
+            --text: #111827;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            background-color: var(--card);
+            padding: 1.5rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 1100px;
+            width: 95%;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .main-display {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .video-card {
+            background: #000;
+            border-radius: 1.2rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            aspect-ratio: 4/3;
+        }
+
+        .video-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .action-bar {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .status-box {
+            text-align: center;
+        }
+
+        #status-name {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            color: var(--primary);
+        }
+
+        button {
+            font-family: inherit;
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: 0.8rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        button:disabled {
+            background-color: #D1D5DB !important;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .btn-in { background-color: var(--secondary); }
+        .btn-in:hover:not(:disabled) { background-color: #059669; transform: translateY(-1px); }
+
+        .btn-out { background-color: var(--primary); }
+        .btn-out:hover:not(:disabled) { background-color: #4338CA; transform: translateY(-1px); }
+
+        .btn-reg { background-color: #6366F1; }
+        .btn-reg:hover:not(:disabled) { background-color: #4F46E5; transform: translateY(-1px); }
+
+        #log {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            padding: 0.8rem;
+            background: #F3F4F6;
+            border-radius: 0.5rem;
+            min-height: 40px;
+            color: #4B5563;
+        }
+
+        .student-item {
+            text-align: center;
+            position: relative;
+            padding: 8px;
+            background: #F9FAFB;
+            border-radius: 10px;
+            transition: transform 0.2s;
+            border: 1px solid #F3F4F6;
+        }
+        
+        .student-item:hover {
+            transform: scale(1.02);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .student-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 12px;
+            margin-top: 10px;
+            max-height: 350px;
+            overflow-y: auto;
+            padding: 5px;
+        }
+
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Uki Smart Attendance</h1>
+    </header>
+
+    <div class="container">
+        <!-- LEFT AREA: Camera & Actions -->
+        <div class="main-display">
+            <div class="video-card">
+                <img src="{{ url_for('video_feed') }}" alt="Live Feed">
+            </div>
+            
+            <div class="action-bar">
+                <button id="btn-in" class="btn-in" onclick="action('clock_in')" disabled>✅ Clock In</button>
+                <button id="btn-out" class="btn-out" onclick="action('clock_out')" disabled>🚪 Clock Out</button>
+                <div style="width: 1px; height: 30px; background: #E5E7EB; margin: 0 10px;"></div>
+                <button class="btn-reg" onclick="register()">📷 Register Student</button>
+            </div>
+
+            <!-- System Log -->
+            <div class="card">
+                <strong>System log:</strong>
+                <div id="log">System is ready...</div>
+            </div>
+        </div>
+
+        <!-- RIGHT AREA: Status & Gallery -->
+        <div class="sidebar">
+            <div class="card status-box">
+                <div style="font-size: 0.9rem; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Detected Face</div>
+                <div id="status-name">Unknown</div>
+            </div>
+
+            <!-- Stats Card -->
+            <div class="card" style="background: linear-gradient(135deg, #4F46E5, #6366F1); color: white;">
+                <div style="font-size: 0.9rem; font-weight: 600; text-transform: uppercase; margin-bottom: 15px; opacity: 0.9;">Analytics</div>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div>
+                        <div style="font-size: 0.75rem; opacity: 0.8;">Registered Students</div>
+                        <div id="stat-registered" style="font-size: 1.4rem; font-weight: 700;">0</div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                        <div>
+                            <div style="font-size: 0.75rem; opacity: 0.8;">Present Today</div>
+                            <div id="stat-present" style="font-size: 1.4rem; font-weight: 700;">0</div>
+                        </div>
+                        <div id="stat-percentage" style="font-size: 1.1rem; font-weight: 700; background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px;">0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's Activity Table (MOVED TO TOP) -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                    <div>
+                        <strong style="font-size: 1.1rem; display: block;">📅 Today's Activity</strong>
+                        <span id="current-day-date" style="font-size: 0.8rem; color: #6B7280; font-weight: 500;">Loading date...</span>
+                    </div>
+                </div>
+                <div style="overflow-x: auto; max-height: 250px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 2px solid #F3F4F6; color: #6B7280;">
+                                <th style="padding: 10px; width: 30px;">#</th>
+                                <th style="padding: 10px;">Name</th>
+                                <th style="padding: 10px;">In</th>
+                                <th style="padding: 10px;">Out</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-table-body">
+                            <!-- Records will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Absent Students Card (MOVED TO BOTTOM) -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem; color: #EF4444;">🚩 Absent Students</strong>
+                    <span id="absent-count" style="font-size: 0.8rem; background: #FEE2E2; color: #EF4444; padding: 2px 8px; border-radius: 12px; font-weight: 700;">0</span>
+                </div>
+                <div id="absent-list" style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.8rem;">
+                    <!-- Absent names will appear here -->
+                </div>
+            </div>
+
+            <div class="card">
+                <strong style="font-size: 1.1rem;">Registered Students</strong>
+                <div id="student-gallery" class="student-gallery">
+                    <!-- Students will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusName = document.getElementById('status-name');
+        const btnIn = document.getElementById('btn-in');
+        const btnOut = document.getElementById('btn-out');
+        const log = document.getElementById('log');
+        const studentGallery = document.getElementById('student-gallery');
+        const attendanceTableBody = document.getElementById('attendance-table-body');
+        const dayDateDisplay = document.getElementById('current-day-date');
+
+        // Show Current Day and Date
+        function updateDisplayDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            dayDateDisplay.innerText = now.toLocaleDateString('en-US', options);
+        }
+        updateDisplayDate();
+
+        // Initial fetch
+        fetchStudents();
+        fetchAttendance();
+
+        async function fetchStudents() {
+            try {
+                const res = await fetch('/get_students');
+                const data = await res.json();
+                studentGallery.innerHTML = '';
+                data.students.forEach(name => {
+                    const div = document.createElement('div');
+                    div.className = 'student-item';
+                    div.innerHTML = `
+                        <img src="/face_image/${name}" style="width: 100%; border-radius: 6px; aspect-ratio: 1; object-fit: cover; border: 1px solid #EEE">
+                        <div style="font-size: 0.75rem; margin-top: 6px; font-weight: 700; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${name}</div>
+                        <div style="display: flex; justify-content: center; gap: 6px; margin-top: 8px;">
+                            <button onclick="editStudent('${name}')" style="padding: 4px 6px; font-size: 0.7rem; background: #6366F1; border-radius: 5px; color: white;">✏️</button>
+                            <button onclick="deleteStudent('${name}')" style="padding: 4px 6px; font-size: 0.7rem; background: #EF4444; border-radius: 5px; color: white;">🗑️</button>
+                        </div>
+                    `;
+                    studentGallery.appendChild(div);
+                });
+            } catch (e) {
+                console.error("Failed to fetch students");
+            }
+        }
+
+        async function fetchAttendance() {
+            try {
+                const res = await fetch('/get_attendance');
+                const data = await res.json();
+                
+                // Update Stats Card
+                document.getElementById('stat-registered').innerText = data.stats.total_registered;
+                document.getElementById('stat-present').innerText = data.stats.total_present;
+                document.getElementById('stat-percentage').innerText = data.stats.percentage + '%';
+
+                // Update Absent List
+                const absentList = document.getElementById('absent-list');
+                const absentCount = document.getElementById('absent-count');
+                absentCount.innerText = data.absent_names.length;
+                absentList.innerHTML = '';
+                
+                if (data.absent_names.length === 0) {
+                    absentList.innerHTML = '<span style="color: #10B981; font-weight: 600;">✅ Everyone is present!</span>';
+                } else {
+                    data.absent_names.forEach(name => {
+                        const span = document.createElement('span');
+                        span.style.padding = '4px 10px';
+                        span.style.background = '#F3F4F6';
+                        span.style.borderRadius = '5px';
+                        span.style.color = '#4B5563';
+                        span.style.fontWeight = '600';
+                        span.innerText = name;
+                        absentList.appendChild(span);
+                    });
+                }
+
+                attendanceTableBody.innerHTML = '';
+                
+                if (data.records.length === 0) {
+                    attendanceTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#9CA3AF;">No records yet today</td></tr>';
+                    return;
+                }
+
+                data.records.reverse().forEach((row, index) => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid #F3F4F6';
+                    tr.innerHTML = `
+                        <td style="padding: 12px; color: #9CA3AF; font-size: 0.75rem;">${data.records.length - index}</td>
+                        <td style="padding: 12px; font-weight: 600;">${row.Name}</td>
+                        <td style="padding: 12px; color: var(--secondary); font-family: monospace;">${row['Clock-In']}</td>
+                        <td style="padding: 12px; color: var(--primary); font-family: monospace;">${row['Clock-Out'] || '--'}</td>
+                    `;
+                    attendanceTableBody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error("Failed to fetch attendance");
+            }
+        }
+
+        async function editStudent(oldName) {
+            const newName = prompt(`Rename "${oldName}" to:`, oldName);
+            if (!newName || newName === oldName) return;
+            
+            log.innerText = "Processing rename...";
+            const res = await fetch('/rename_student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_name: oldName, new_name: newName })
+            });
+            const data = await res.json();
+            log.innerText = data.message;
+            if (data.success) {
+                fetchStudents();
+                fetchAttendance();
+            }
+        }
+
+        async function deleteStudent(name) {
+            if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) return;
+            
+            log.innerText = `Deleting ${name}...`;
+            const res = await fetch(`/delete_student/${name}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            log.innerText = data.message;
+            if (data.success) {
+                fetchStudents();
+                fetchAttendance();
+            }
+        }
+
+        // Check status periodically
+        setInterval(async () => {
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+                statusName.innerText = data.name;
+                
+                if (data.name !== 'Unknown') {
+                    btnIn.disabled = false;
+                    btnOut.disabled = false;
+                    statusName.style.color = 'var(--secondary)';
+                } else {
+                    btnIn.disabled = true;
+                    btnOut.disabled = true;
+                    statusName.style.color = 'var(--primary)';
+                }
+            } catch (e) {
+                console.error("Status fetch failed");
+            }
+        }, 1000);
+
+        // Fetch attendance periodically
+        setInterval(fetchAttendance, 5000);
+
+        async function action(type, override = false) {
+            const currentName = statusName.innerText;
+            log.innerText = `${override ? 'Overriding' : 'Logging'} ${type.replace('_', ' ')} for ${currentName}...`;
+            
+            const res = await fetch(`/${type}`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ override: override })
+            });
+            const data = await res.json();
+            
+            if (data.is_conflict) {
+                if (confirm(`${data.message}\n\nWould you like to override the existing time with the current time?`)) {
+                    return action(type, true);
+                }
+            }
+            
+            log.innerText = data.message;
+            if (data.success) fetchAttendance();
+        }
+
+        async function register() {
+            const name = prompt("Enter the student's full name:");
+            if (!name) return;
+            
+            log.innerText = `Preparing to register: ${name}. Please look at the camera.`;
+            const res = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            const data = await res.json();
+            log.innerText = data.message;
+            if (data.success) {
+                fetchStudents();
+                fetchAttendance();
+            }
+        }
+    </script>
+</body>
+</html>
