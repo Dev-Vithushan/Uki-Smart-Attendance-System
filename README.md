@@ -51,8 +51,8 @@ sudo apt-get install -y libopenblas-dev liblapack-dev libx11-dev libgtk-3-dev
 ### 2. Project Initialization (All Platforms)
 ```bash
 # Clone the repository
-git clone <your-repo-link>
-cd FaceFind
+git clone https://github.com/Dev-Vithushan/Uki-Smart-Attendance-System.git
+cd Uki-Smart-Attendance-System
 
 # Create and activate virtual environment
 # Windows:
@@ -90,7 +90,7 @@ Access the dashboard at: **[http://localhost:5050](http://localhost:5050)**
 ## 📂 Project Structure
 
 ```text
-FaceFind/
+Uki-Smart-Attendance-System/
 ├── app.py                 # Flask server & background camera thread
 ├── face_engine.py         # Face detection, encoding, & Master Repo logic
 ├── attendance_service.py   # CSV logging, monthly organization, & stats
