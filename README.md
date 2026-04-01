@@ -119,3 +119,92 @@ This system does NOT just rely on filenames. The `students_master.csv` manages t
 - **"Port 5050 already in use"**: On macOS Sequoia/Sonoma, the "AirPlay Receiver" uses port 5050. Run the kill command provided above or disable "AirPlay Receiver" in System Settings.
 - **Camera Permission**: Ensure your Terminal/IDE has **Camera Access** in macOS System Settings > Privacy & Security.
 - **No Face Recognized**: Ensure lighting is sufficient and you are looking directly at the camera.
+
+---
+
+## 🚀 Google Drive Integration
+
+### Setup (One-Time per Developer)
+
+The system automatically uploads attendance data to Google Drive as Google Sheets.
+
+#### Step 1: Create Google Cloud Project
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project: `Uki Attendance System`
+3. Enable **Google Drive API**
+
+#### Step 2: Generate OAuth Credentials
+1. Go to **Credentials**
+2. Create **OAuth 2.0 Client ID** (Desktop application)
+3. Download the JSON file and rename to `client_secrets.json`
+4. Place in project root
+
+#### Step 3: Authorize the App
+```bash
+source venv/bin/activate
+python setup_oauth.py
+```
+
+A browser will open for authorization. Sign in with your Google account.
+- ✅ `token.json` is created automatically (machine-specific)
+- ✅ Never commit this file (it's in `.gitignore`)
+
+### Uploading to Google Drive
+
+Once authorized, check-in/check-out automatically uploads attendance as Google Sheets:
+- 📊 One sheet per day (updates on subsequent check-ins)
+- 📂 Organized in month folders (April-26, May-26, etc.)
+- 🔄 Real-time sync
+
+---
+
+## 👥 For Team Developers
+
+### Sharing the Project
+
+**⚠️ Security First:**
+
+Never commit these files to GitHub:
+- `client_secrets.json` - OAuth credentials
+- `token.json` - Authorization token
+- (Already handled by `.gitignore`)
+
+### For New Team Members
+
+Each developer must:
+1. Clone the repo
+2. Create their own `client_secrets.json` (see Google Drive setup above)
+3. Run `python setup_oauth.py` to get their own `token.json`
+
+#### Using Shared Test Credentials
+
+If your team uses shared test Gmail:
+1. **Project lead** creates `client_secrets.json`
+2. **Project lead** adds team members as test users in OAuth consent screen
+3. **Project lead** shares `client_secrets.json` securely (email/Slack, never GitHub)
+4. **Each developer**:
+   ```bash
+   # Place shared client_secrets.json in project root
+   python setup_oauth.py
+   # Authorize with shared test Gmail account
+   ```
+5. Each developer gets their **own** `token.json` locally
+
+### Development Workflow
+
+```bash
+# Make changes (credentials won't be committed)
+git add .
+git commit -m "Feature: Add new functionality"
+git push origin main
+```
+
+---
+
+## 📖 Complete Developer Setup Guide
+
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed setup instructions for new developers, including:
+- Step-by-step Google Drive setup
+- Shared credentials guidelines
+- Troubleshooting common issues
+- Security best practices

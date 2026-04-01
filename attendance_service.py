@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from config import ATTENDANCE_LOG_DIR
 import face_engine
+from google_drive_service import sync_to_drive_async
 
 def get_today_file_path():
     """
@@ -69,6 +70,7 @@ def check_in(name, override=False):
             new_row = {"Name": name, "Date": date_str, "Status": "Present", "Clock-In": time_str, "Clock-Out": ""}
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             df.to_csv(path, index=False)
+            sync_to_drive_async(path)
             return True, f"Successfully clocked in at {time_str}.", False
 
         # If already Present and not overriding
@@ -81,6 +83,7 @@ def check_in(name, override=False):
         df.at[idx, "Clock-In"] = time_str
         df.at[idx, "Name"] = name
         df.to_csv(path, index=False)
+        sync_to_drive_async(path)
         
         msg = f"Clock-in overridden to {time_str}." if override else f"Successfully clocked in at {time_str}."
         return True, msg, False
@@ -118,6 +121,7 @@ def check_out(name, override=False):
         df.at[idx, "Clock-Out"] = time_str
         df.at[idx, "Name"] = name
         df.to_csv(path, index=False)
+        sync_to_drive_async(path)
         
         msg = f"Clock-out overridden to {time_str}." if override else f"Successfully clocked out at {time_str}."
         return True, msg, False
@@ -176,6 +180,7 @@ def delete_student_from_today_log(name):
             df = pd.read_csv(path)
             df = df[df["Name"].str.title() != name]
             df.to_csv(path, index=False)
+            sync_to_drive_async(path)
             return True
     except Exception as e:
         print(f"Error deleting from log: {e}")
@@ -193,6 +198,7 @@ def rename_student_in_today_log(old_name, new_name):
             df = pd.read_csv(path)
             df.loc[df["Name"].str.title() == old_name, "Name"] = new_name
             df.to_csv(path, index=False)
+            sync_to_drive_async(path)
             return True
     except Exception as e:
         print(f"Error renaming in log: {e}")

@@ -15,3 +15,8 @@ os.makedirs(ATTENDANCE_LOG_DIR, exist_ok=True)
 # Application settings
 WINDOW_TITLE = "FaceFind Attendance System"
 WINDOW_GEOMETRY = "800x650"
+
+# Google Drive Sync (OAuth 2.0)
+GOOGLE_DRIVE_FOLDER_ID = "1atCGlJjqkdn3HuOHgg5r-DMbkKgHyCnC"
+CLIENT_SECRETS_FILE = os.path.join(BASE_DIR, "client_secrets.json")
+TOKEN_FILE = os.path.join(BASE_DIR, "token.json")
