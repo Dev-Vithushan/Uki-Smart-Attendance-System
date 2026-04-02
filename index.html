@@ -399,6 +399,7 @@
     let recognitionBusy = false;
     let cameraReady = false;
     let modelsReady = false;
+    let attendanceResyncTimer = null;
 
     function setLog(message) {
       logBox.textContent = message;
@@ -528,12 +529,8 @@
       return wrapper;
     }
 
-    async function fetchStudents() {
-      const response = await fetch("/api/students");
-      if (!response.ok) throw new Error("Failed to fetch students");
-
-      const data = await response.json();
-      students = (data.students || []).map((student) => ({
+    function applyStudents(nextStudents) {
+      students = (nextStudents || []).map((student) => ({
         ...student,
         descriptor: Array.isArray(student.descriptor)
           ? student.descriptor.map((value) => Number(value))
@@ -544,6 +541,14 @@
       for (const student of students) {
         studentGallery.appendChild(makeStudentCard(student));
       }
+    }
+
+    async function fetchStudents() {
+      const response = await fetch("/api/students", { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to fetch students");
+
+      const data = await response.json();
+      applyStudents(data.students || []);
     }
 
     function renderAbsentNames(absentNames) {
@@ -607,17 +612,38 @@
       });
     }
 
-    async function fetchAttendance() {
-      const response = await fetch("/api/attendance");
-      if (!response.ok) throw new Error("Failed to fetch attendance");
-
-      const data = await response.json();
+    function applyAttendancePayload(data) {
+      if (!data || !data.stats) return;
       document.getElementById("stat-registered").textContent = String(data.stats.total_registered || 0);
       document.getElementById("stat-present").textContent = String(data.stats.total_present || 0);
       document.getElementById("stat-percentage").textContent = `${data.stats.percentage || 0}%`;
 
       renderAttendanceTable(data.records || []);
       renderAbsentNames(data.absent_names || []);
+    }
+
+    async function fetchAttendance() {
+      const response = await fetch("/api/attendance", { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to fetch attendance");
+
+      const data = await response.json();
+      applyAttendancePayload(data);
+    }
+
+    function scheduleAttendanceResync(delayMs = 25000) {
+      if (attendanceResyncTimer) {
+        clearTimeout(attendanceResyncTimer);
+      }
+
+      attendanceResyncTimer = window.setTimeout(async () => {
+        try {
+          await fetchAttendance();
+        } catch (error) {
+          console.error(error);
+        } finally {
+          attendanceResyncTimer = null;
+        }
+      }, delayMs);
     }
 
     function formatDateLabel(dateStr) {
@@ -632,7 +658,7 @@
     }
 
     async function fetchAttendanceFiles() {
-      const response = await fetch("/api/attendance/files");
+      const response = await fetch("/api/attendance/files", { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to fetch attendance files");
 
       const data = await response.json();
@@ -665,6 +691,7 @@
     async function apiPost(url, payload) {
       const response = await fetch(url, {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload || {}),
       });
@@ -699,8 +726,13 @@
       }
 
       setLog(data.message);
-      await fetchAttendance();
+      if (data.summary) {
+        applyAttendancePayload(data.summary);
+      } else {
+        await fetchAttendance();
+      }
       await fetchAttendanceFiles();
+      scheduleAttendanceResync();
     }
 
     async function captureCurrentFacePayload() {
@@ -745,7 +777,11 @@
       setLog(data.message || "Registration request completed.");
       if (!response.ok) return;
 
-      await fetchStudents();
+      if (Array.isArray(data.students)) {
+        applyStudents(data.students);
+      } else {
+        await fetchStudents();
+      }
       await fetchAttendance();
       await fetchAttendanceFiles();
     }
@@ -761,7 +797,11 @@
       setLog(data.message || "Rename completed.");
       if (!response.ok) return;
 
-      await fetchStudents();
+      if (Array.isArray(data.students)) {
+        applyStudents(data.students);
+      } else {
+        await fetchStudents();
+      }
       await fetchAttendance();
     }
 
@@ -772,7 +812,11 @@
       setLog(data.message || "Delete completed.");
       if (!response.ok) return;
 
-      await fetchStudents();
+      if (Array.isArray(data.students)) {
+        applyStudents(data.students);
+      } else {
+        await fetchStudents();
+      }
       await fetchAttendance();
       await fetchAttendanceFiles();
     }

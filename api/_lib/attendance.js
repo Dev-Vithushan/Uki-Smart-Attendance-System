@@ -99,6 +99,30 @@ function byNameMap(records) {
   return map;
 }
 
+function buildAttendanceSummary(rows, students) {
+  const normalizedRows = rows.map(normalizeRecord);
+  const records = normalizedRows.filter((row) => row.Status === "Present");
+  const absentNames = normalizedRows
+    .filter((row) => row.Status !== "Present")
+    .map((row) => row.Name)
+    .sort();
+
+  const totalRegistered = students.length;
+  const totalPresent = records.length;
+  const percentage =
+    totalRegistered > 0 ? Number(((totalPresent / totalRegistered) * 100).toFixed(1)) : 0;
+
+  return {
+    records,
+    absent_names: absentNames,
+    stats: {
+      total_registered: totalRegistered,
+      total_present: totalPresent,
+      percentage,
+    },
+  };
+}
+
 export async function cleanupOldAttendanceFiles(retentionDays = RETENTION_DAYS) {
   const effectiveRetention = sanitizeRetentionDays(retentionDays);
   const today = getNowParts().date;
@@ -124,7 +148,9 @@ export async function cleanupOldAttendanceFiles(retentionDays = RETENTION_DAYS) 
   };
 }
 
-async function ensureAttendanceFileForDate(dateString, students) {
+async function ensureAttendanceFileForDate(dateString, students, options = {}) {
+  const writeChanges = options.writeChanges === true;
+
   const path = attendancePathForDate(dateString);
   const csv = await getBlobText(path);
   const existingRecords = parseAttendanceCsv(csv || "");
@@ -146,43 +172,29 @@ async function ensureAttendanceFileForDate(dateString, students) {
   });
 
   const nextCsv = toAttendanceCsv(mergedRows);
-  await putBlobText(path, nextCsv, "text/csv; charset=utf-8");
+  if (writeChanges) {
+    await putBlobText(path, nextCsv, "text/csv; charset=utf-8");
+  }
 
   return { path, rows: mergedRows, csv: nextCsv };
 }
 
-export async function ensureTodayAttendanceFile() {
+export async function ensureTodayAttendanceFile(options = {}) {
   await cleanupOldAttendanceFiles();
   const students = await getMasterStudents();
   const { date } = getNowParts();
-  return ensureAttendanceFileForDate(date, students);
+  return ensureAttendanceFileForDate(date, students, {
+    writeChanges: options.writeChanges !== false,
+  });
 }
 
 export async function getTodayAttendanceSummary() {
   const students = await getMasterStudents();
   const { date } = getNowParts();
-  const { rows } = await ensureAttendanceFileForDate(date, students);
-
-  const records = rows.filter((row) => row.Status === "Present");
-  const absentNames = rows
-    .filter((row) => row.Status !== "Present")
-    .map((row) => row.Name)
-    .sort();
-
-  const totalRegistered = students.length;
-  const totalPresent = records.length;
-  const percentage =
-    totalRegistered > 0 ? Number(((totalPresent / totalRegistered) * 100).toFixed(1)) : 0;
-
-  return {
-    records,
-    absent_names: absentNames,
-    stats: {
-      total_registered: totalRegistered,
-      total_present: totalPresent,
-      percentage,
-    },
-  };
+  const { rows } = await ensureAttendanceFileForDate(date, students, {
+    writeChanges: false,
+  });
+  return buildAttendanceSummary(rows, students);
 }
 
 export async function updateAttendance(type, name, override = false) {
@@ -198,7 +210,9 @@ export async function updateAttendance(type, name, override = false) {
   }
 
   const { date, time } = getNowParts();
-  const { path, rows } = await ensureAttendanceFileForDate(date, students);
+  const { path, rows } = await ensureAttendanceFileForDate(date, students, {
+    writeChanges: false,
+  });
   const index = rows.findIndex((row) => row.Name.toLowerCase() === student.name.toLowerCase());
 
   if (index < 0) {
@@ -256,6 +270,7 @@ export async function updateAttendance(type, name, override = false) {
         : override
           ? `Clock-out overridden to ${time}.`
           : `Successfully clocked out at ${time}.`,
+    summary: buildAttendanceSummary(rows, students),
   };
 }
 
@@ -297,7 +312,12 @@ export async function downloadAttendanceCsv(dateString) {
 
   const today = getNowParts().date;
   if (date === today) {
-    await ensureTodayAttendanceFile();
+    const { csv } = await ensureTodayAttendanceFile({ writeChanges: false });
+    return {
+      date,
+      csv,
+      filename: `attendance_${date}_google_sheets.csv`,
+    };
   }
 
   const path = attendancePathForDate(date);

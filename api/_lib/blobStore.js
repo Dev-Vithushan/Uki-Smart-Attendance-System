@@ -27,7 +27,15 @@ export async function getBlobText(pathname) {
   const blob = await findBlobByPath(pathname);
   if (!blob) return null;
 
-  const response = await fetch(blob.url);
+  const url = new URL(blob.downloadUrl || `${blob.url}?download=1`);
+  url.searchParams.set("_ts", Date.now().toString());
+
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-cache",
+    },
+  });
   if (!response.ok) {
     throw new Error(`Failed reading blob ${pathname}: ${response.status}`);
   }
