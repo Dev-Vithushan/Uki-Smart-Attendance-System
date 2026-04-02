@@ -378,6 +378,13 @@
   <script>
     const FACE_MODELS_URL = "https://justadudewhohacks.github.io/face-api.js/models";
     const FACE_MATCH_THRESHOLD = 0.5;
+    const RECOGNITION_INTERVAL_MS = 700;
+    const DETECTION_INPUT_SIZE = 224;
+    const DETECTION_SCORE_THRESHOLD = 0.45;
+    const RECENT_DESCRIPTOR_MAX_AGE_MS = 3000;
+    const REGISTRATION_IMAGE_MAX_WIDTH = 640;
+    const REGISTRATION_IMAGE_MAX_HEIGHT = 640;
+    const REGISTRATION_IMAGE_QUALITY = 0.75;
 
     const video = document.getElementById("video");
     const statusName = document.getElementById("status-name");
@@ -399,7 +406,12 @@
     let recognitionBusy = false;
     let cameraReady = false;
     let modelsReady = false;
+    let registeringInProgress = false;
+    let lastDescriptor = null;
+    let lastDescriptorCapturedAt = 0;
+    let detectorOptions = null;
     let attendanceResyncTimer = null;
+    const registerButtonLabel = btnReg.textContent;
 
     function setLog(message) {
       logBox.textContent = message;
@@ -452,21 +464,65 @@
       modelsReady = true;
     }
 
-    function bestStudentMatch(descriptor) {
-      if (!descriptor || students.length === 0) return null;
+    function getDetectorOptions() {
+      if (!detectorOptions) {
+        detectorOptions = new faceapi.TinyFaceDetectorOptions({
+          inputSize: DETECTION_INPUT_SIZE,
+          scoreThreshold: DETECTION_SCORE_THRESHOLD,
+        });
+      }
+      return detectorOptions;
+    }
 
-      let best = null;
-      for (const student of students) {
-        if (!Array.isArray(student.descriptor) || student.descriptor.length === 0) continue;
+    async function detectCurrentFaceDescriptor() {
+      const detection = await faceapi
+        .detectSingleFace(video, getDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
 
-        const distance = faceapi.euclideanDistance(descriptor, student.descriptor);
-        if (!best || distance < best.distance) {
-          best = { student, distance };
+      if (!detection || !detection.descriptor) {
+        return null;
+      }
+
+      return detection.descriptor;
+    }
+
+    function squaredDistanceWithLimit(lhs, rhs, limitSq) {
+      if (!(lhs && rhs) || lhs.length !== rhs.length) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      let total = 0;
+      for (let index = 0; index < lhs.length; index += 1) {
+        const diff = lhs[index] - rhs[index];
+        total += diff * diff;
+        if (total > limitSq) {
+          return Number.POSITIVE_INFINITY;
         }
       }
 
-      if (!best || best.distance > FACE_MATCH_THRESHOLD) return null;
-      return best.student;
+      return total;
+    }
+
+    function bestStudentMatch(descriptor) {
+      if (!descriptor || students.length === 0) return null;
+
+      const faceDescriptor = descriptor instanceof Float32Array ? descriptor : Float32Array.from(descriptor);
+      const thresholdSq = FACE_MATCH_THRESHOLD * FACE_MATCH_THRESHOLD;
+      let best = null;
+      let bestDistanceSq = thresholdSq;
+
+      for (const student of students) {
+        if (!(student.descriptorVec instanceof Float32Array) || student.descriptorVec.length === 0) continue;
+
+        const distanceSq = squaredDistanceWithLimit(faceDescriptor, student.descriptorVec, bestDistanceSq);
+        if (distanceSq < bestDistanceSq) {
+          bestDistanceSq = distanceSq;
+          best = student;
+        }
+      }
+
+      return best;
     }
 
     async function runRecognition() {
@@ -474,17 +530,16 @@
       recognitionBusy = true;
 
       try {
-        const detection = await faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-          .withFaceLandmarks()
-          .withFaceDescriptor();
-
-        if (!detection || !detection.descriptor) {
+        const descriptor = await detectCurrentFaceDescriptor();
+        if (!descriptor) {
+          lastDescriptor = null;
+          lastDescriptorCapturedAt = 0;
           setRecognizedName("Unknown");
           return;
         }
 
-        const descriptor = Array.from(detection.descriptor);
+        lastDescriptor = descriptor;
+        lastDescriptorCapturedAt = Date.now();
         const match = bestStudentMatch(descriptor);
         setRecognizedName(match ? match.name : "Unknown");
       } catch (error) {
@@ -501,6 +556,8 @@
       const img = document.createElement("img");
       img.src = student.imageUrl || "";
       img.alt = student.name;
+      img.loading = "lazy";
+      img.decoding = "async";
       wrapper.appendChild(img);
 
       const name = document.createElement("div");
@@ -529,18 +586,48 @@
       return wrapper;
     }
 
-    function applyStudents(nextStudents) {
-      students = (nextStudents || []).map((student) => ({
-        ...student,
-        descriptor: Array.isArray(student.descriptor)
-          ? student.descriptor.map((value) => Number(value))
-          : [],
-      }));
+    function normalizeStudentForClient(student) {
+      const descriptor = Array.isArray(student?.descriptor)
+        ? student.descriptor.map((value) => Number(value))
+        : [];
 
+      return {
+        ...student,
+        descriptor,
+        descriptorVec: Float32Array.from(descriptor),
+      };
+    }
+
+    function renderStudentGallery() {
       studentGallery.innerHTML = "";
       for (const student of students) {
         studentGallery.appendChild(makeStudentCard(student));
       }
+    }
+
+    function applyStudents(nextStudents) {
+      students = (nextStudents || []).map(normalizeStudentForClient);
+      students.sort((left, right) => left.name.localeCompare(right.name));
+      renderStudentGallery();
+    }
+
+    function upsertStudent(student) {
+      if (!student || !student.name) return;
+
+      const normalizedStudent = normalizeStudentForClient(student);
+      const key = String(normalizedStudent.name).toLowerCase();
+      const existingIndex = students.findIndex(
+        (candidate) => String(candidate.name || "").toLowerCase() === key
+      );
+
+      if (existingIndex >= 0) {
+        students[existingIndex] = normalizedStudent;
+      } else {
+        students.push(normalizedStudent);
+      }
+
+      students.sort((left, right) => left.name.localeCompare(right.name));
+      renderStudentGallery();
     }
 
     async function fetchStudents() {
@@ -735,55 +822,99 @@
       scheduleAttendanceResync();
     }
 
-    async function captureCurrentFacePayload() {
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detection || !detection.descriptor) {
+    function captureRegistrationImageDataUrl() {
+      if (!video.videoWidth || !video.videoHeight) {
         return null;
       }
 
+      const scale = Math.min(
+        1,
+        REGISTRATION_IMAGE_MAX_WIDTH / video.videoWidth,
+        REGISTRATION_IMAGE_MAX_HEIGHT / video.videoHeight
+      );
+      const width = Math.max(1, Math.round(video.videoWidth * scale));
+      const height = Math.max(1, Math.round(video.videoHeight * scale));
+
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0, width, height);
+
+      return canvas.toDataURL("image/jpeg", REGISTRATION_IMAGE_QUALITY);
+    }
+
+    function setRegisteringState(isBusy) {
+      registeringInProgress = isBusy;
+      btnReg.disabled = isBusy;
+      btnReg.textContent = isBusy ? "Registering..." : registerButtonLabel;
+    }
+
+    async function captureCurrentFacePayload() {
+      const now = Date.now();
+      const hasRecentDescriptor =
+        lastDescriptor && now - lastDescriptorCapturedAt <= RECENT_DESCRIPTOR_MAX_AGE_MS;
+
+      const descriptor = hasRecentDescriptor ? lastDescriptor : await detectCurrentFaceDescriptor();
+      if (!descriptor) {
+        return null;
+      }
+
+      lastDescriptor = descriptor;
+      lastDescriptorCapturedAt = Date.now();
+
+      const imageDataUrl = captureRegistrationImageDataUrl();
+      if (!imageDataUrl) {
+        return null;
+      }
 
       return {
-        descriptor: Array.from(detection.descriptor),
-        imageDataUrl: canvas.toDataURL("image/jpeg", 0.92),
+        descriptor: Array.from(descriptor),
+        imageDataUrl,
       };
     }
 
     async function registerStudent() {
+      if (registeringInProgress) return;
+
       const name = prompt("Enter student full name:");
       if (!name) return;
 
-      setLog("Capturing face for registration...");
-      const payload = await captureCurrentFacePayload();
-      if (!payload) {
-        setLog("No face detected. Please face the camera and try again.");
-        return;
+      setRegisteringState(true);
+      try {
+        setLog("Capturing face for registration...");
+        const payload = await captureCurrentFacePayload();
+        if (!payload) {
+          setLog("No face detected. Please face the camera and try again.");
+          return;
+        }
+
+        setLog("Saving student...");
+        const { response, data } = await apiPost("/api/students/register", {
+          name,
+          imageDataUrl: payload.imageDataUrl,
+          descriptor: payload.descriptor,
+        });
+
+        setLog(data.message || "Registration request completed.");
+        if (!response.ok) return;
+
+        if (data.student) {
+          upsertStudent(data.student);
+        } else if (Array.isArray(data.students)) {
+          applyStudents(data.students);
+        } else {
+          await fetchStudents();
+        }
+
+        await Promise.all([fetchAttendance(), fetchAttendanceFiles()]);
+      } catch (error) {
+        console.error("register error:", error);
+        setLog(`Registration failed: ${error.message}`);
+      } finally {
+        setRegisteringState(false);
       }
-
-      const { response, data } = await apiPost("/api/students/register", {
-        name,
-        imageDataUrl: payload.imageDataUrl,
-        descriptor: payload.descriptor,
-      });
-
-      setLog(data.message || "Registration request completed.");
-      if (!response.ok) return;
-
-      if (Array.isArray(data.students)) {
-        applyStudents(data.students);
-      } else {
-        await fetchStudents();
-      }
-      await fetchAttendance();
-      await fetchAttendanceFiles();
     }
 
     async function renameStudent(oldName) {
@@ -836,17 +967,13 @@
       setRecognizedName("Unknown");
 
       try {
-        setLog("Loading face models...");
-        await loadFaceModels();
-        setLog("Starting camera...");
-        await startCamera();
+        setLog("Preparing camera and face models...");
+        await Promise.all([loadFaceModels(), startCamera()]);
         setLog("Loading students and attendance...");
 
-        await fetchStudents();
-        await fetchAttendance();
-        await fetchAttendanceFiles();
+        await Promise.all([fetchStudents(), fetchAttendance(), fetchAttendanceFiles()]);
 
-        setInterval(runRecognition, 1000);
+        setInterval(runRecognition, RECOGNITION_INTERVAL_MS);
         setInterval(async () => {
           try {
             await fetchAttendanceFiles();
