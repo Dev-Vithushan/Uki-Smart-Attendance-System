@@ -1,8 +1,135 @@
 import os
 import pandas as pd
-from datetime import datetime
-from config import ATTENDANCE_LOG_DIR
+from datetime import datetime, timedelta
+from config import ATTENDANCE_LOG_DIR, LOG_RETENTION_DAYS
 import face_engine
+
+ATTENDANCE_FILE_PREFIX = "attendance_"
+ATTENDANCE_FILE_SUFFIX = ".csv"
+
+
+def _extract_date_from_filename(filename):
+    """Extracts a date object from filenames like attendance_2026-04-02.csv."""
+    if not (
+        filename.startswith(ATTENDANCE_FILE_PREFIX)
+        and filename.endswith(ATTENDANCE_FILE_SUFFIX)
+    ):
+        return None
+
+    date_part = filename[
+        len(ATTENDANCE_FILE_PREFIX): -len(ATTENDANCE_FILE_SUFFIX)
+    ]
+    try:
+        return datetime.strptime(date_part, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _iter_attendance_files():
+    """Yields parsed attendance files from all monthly folders."""
+    for root, _, files in os.walk(ATTENDANCE_LOG_DIR):
+        for filename in files:
+            file_date = _extract_date_from_filename(filename)
+            if file_date is None:
+                continue
+
+            full_path = os.path.join(root, filename)
+            month = os.path.basename(root)
+            yield file_date, full_path, filename, month
+
+
+def cleanup_old_logs(retention_days=LOG_RETENTION_DAYS):
+    """
+    Removes attendance files older than retention_days (inclusive window).
+    Example: retention_days=15 keeps today and the previous 14 days.
+    """
+    try:
+        retention_days = int(retention_days)
+    except (TypeError, ValueError):
+        retention_days = LOG_RETENTION_DAYS
+
+    if retention_days < 1:
+        retention_days = 1
+
+    cutoff_date = datetime.now().date() - timedelta(days=retention_days - 1)
+    deleted_files = []
+
+    for file_date, full_path, _, _ in _iter_attendance_files():
+        if file_date < cutoff_date:
+            try:
+                os.remove(full_path)
+                deleted_files.append(full_path)
+            except OSError as e:
+                print(f"Failed deleting old log {full_path}: {e}")
+
+    # Remove empty month folders after file cleanup.
+    for root, dirs, files in os.walk(ATTENDANCE_LOG_DIR, topdown=False):
+        if root == ATTENDANCE_LOG_DIR:
+            continue
+        if not dirs and not files:
+            try:
+                os.rmdir(root)
+            except OSError:
+                pass
+
+    return {
+        "deleted_files": deleted_files,
+        "retention_days": retention_days,
+        "cutoff_date": cutoff_date.isoformat(),
+    }
+
+
+def get_available_attendance_files(limit_days=None):
+    """Returns available attendance CSV files sorted by newest date first."""
+    collected = []
+    for file_date, full_path, filename, month in _iter_attendance_files():
+        collected.append(
+            (
+                file_date,
+                {
+                    "date": file_date.isoformat(),
+                    "filename": filename,
+                    "month": month,
+                    "relative_path": os.path.relpath(full_path, ATTENDANCE_LOG_DIR),
+                },
+            )
+        )
+
+    collected.sort(key=lambda item: item[0], reverse=True)
+
+    if limit_days is not None:
+        try:
+            limit_days = int(limit_days)
+        except (TypeError, ValueError):
+            limit_days = None
+
+        if limit_days is not None and limit_days > 0:
+            cutoff_date = datetime.now().date() - timedelta(days=limit_days - 1)
+            collected = [item for item in collected if item[0] >= cutoff_date]
+
+    return [item[1] for item in collected]
+
+
+def get_attendance_file_path_by_date(date_str):
+    """Returns the full CSV path for a YYYY-MM-DD date, or None if missing."""
+    try:
+        requested_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+    expected_month = requested_date.strftime("%B")
+    expected_filename = f"{ATTENDANCE_FILE_PREFIX}{requested_date.isoformat()}{ATTENDANCE_FILE_SUFFIX}"
+    expected_path = os.path.join(ATTENDANCE_LOG_DIR, expected_month, expected_filename)
+    if os.path.exists(expected_path):
+        return expected_path
+
+    # Fallback search to handle migrated folders.
+    for file_date, full_path, _, _ in _iter_attendance_files():
+        if file_date == requested_date:
+            return full_path
+
+    return None
+
 
 def get_today_file_path():
     """
@@ -25,6 +152,7 @@ def init_attendance_file():
     """
     Ensures today's attendance file exists with headers and ALL registered students from the Master List.
     """
+    cleanup_old_logs()
     path = get_today_file_path()
     
     # Check if exists or is empty

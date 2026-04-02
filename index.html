@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uki Smart Attendance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --secondary: #059669;
+      --danger: #dc2626;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Outfit", sans-serif;
+      background: radial-gradient(circle at top, #e0f2fe 0%, #f8fafc 35%, #f8fafc 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 1.25rem 1rem;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #e2e8f0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      color: var(--primary);
+    }
+
+    .layout {
+      width: min(1200px, 96%);
+      margin: 1.5rem auto 2.5rem;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 1.25rem;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      border: 1px solid #e2e8f0;
+      padding: 1rem;
+    }
+
+    .video-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #video {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      display: block;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      font: inherit;
+      font-weight: 700;
+      padding: 0.8rem 0.9rem;
+      cursor: pointer;
+      color: #fff;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(0.96);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-in { background: var(--secondary); }
+    .btn-out { background: var(--primary); }
+    .btn-reg { background: #7c3aed; }
+    .btn-edit { background: #4f46e5; font-size: 0.72rem; padding: 0.35rem 0.5rem; }
+    .btn-delete { background: var(--danger); font-size: 0.72rem; padding: 0.35rem 0.5rem; }
+    .btn-download { background: #0284c7; }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .title-row strong {
+      font-size: 1rem;
+    }
+
+    #log {
+      margin-top: 0.55rem;
+      border-radius: 8px;
+      padding: 0.75rem;
+      background: #f1f5f9;
+      color: #334155;
+      min-height: 44px;
+      font-size: 0.92rem;
+    }
+
+    #status-name {
+      font-size: 1.45rem;
+      font-weight: 700;
+      margin-top: 0.3rem;
+      color: var(--primary);
+    }
+
+    .stats-card {
+      background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
+      color: #fff;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.8rem;
+      margin-top: 0.8rem;
+    }
+
+    .stat-label {
+      font-size: 0.74rem;
+      opacity: 0.85;
+    }
+
+    .stat-value {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-top: 0.15rem;
+    }
+
+    .attendance-wrap {
+      overflow: auto;
+      max-height: 250px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      padding: 0.6rem 0.65rem;
+      border-bottom: 1px solid #f1f5f9;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      z-index: 1;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .absent-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-top: 0.7rem;
+    }
+
+    .pill {
+      padding: 0.26rem 0.55rem;
+      border-radius: 999px;
+      background: #f1f5f9;
+      font-size: 0.78rem;
+      color: #334155;
+      font-weight: 600;
+    }
+
+    .gallery {
+      margin-top: 0.7rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+      gap: 0.7rem;
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .student {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 0.5rem;
+      background: #fff;
+    }
+
+    .student img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #e2e8f0;
+    }
+
+    .student-name {
+      margin-top: 0.45rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #334155;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .student-actions {
+      margin-top: 0.45rem;
+      display: flex;
+      gap: 0.35rem;
+    }
+
+    .download-controls {
+      margin-top: 0.7rem;
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .download-controls select {
+      flex: 1;
+      min-width: 170px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 0.68rem 0.72rem;
+      font: inherit;
+      color: #0f172a;
+      background: #fff;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Uki Smart Attendance (Vercel Edition)</h1>
+  </header>
+
+  <main class="layout">
+    <section class="stack">
+      <div class="card video-card">
+        <video id="video" autoplay muted playsinline></video>
+      </div>
+
+      <div class="card actions">
+        <button id="btn-in" class="btn-in" disabled>Clock In</button>
+        <button id="btn-out" class="btn-out" disabled>Clock Out</button>
+        <button id="btn-reg" class="btn-reg">Register Student</button>
+      </div>
+
+      <div class="card">
+        <strong>System Log</strong>
+        <div id="log">Initializing...</div>
+      </div>
+    </section>
+
+    <section class="stack">
+      <div class="card">
+        <div style="font-size:0.82rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">Detected Face</div>
+        <div id="status-name">Unknown</div>
+      </div>
+
+      <div class="card stats-card">
+        <strong>Analytics</strong>
+        <div class="stats-grid">
+          <div>
+            <div class="stat-label">Registered</div>
+            <div id="stat-registered" class="stat-value">0</div>
+          </div>
+          <div>
+            <div class="stat-label">Present</div>
+            <div id="stat-present" class="stat-value">0</div>
+          </div>
+          <div>
+            <div class="stat-label">Percentage</div>
+            <div id="stat-percentage" class="stat-value">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="title-row">
+          <strong>Today's Activity</strong>
+          <span id="current-day-date" style="font-size:0.78rem; color:var(--muted);"></span>
+        </div>
+        <div class="attendance-wrap" style="margin-top:0.7rem;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:34px;">#</th>
+                <th>Name</th>
+                <th>In</th>
+                <th>Out</th>
+              </tr>
+            </thead>
+            <tbody id="attendance-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="title-row">
+          <strong>Download Attendance</strong>
+          <span id="retention-info" style="font-size:0.78rem; color:var(--muted);">Last 15 days</span>
+        </div>
+        <div class="download-controls">
+          <select id="attendance-date-select"></select>
+          <button id="btn-download" class="btn-download" disabled>Download CSV</button>
+        </div>
+        <div style="margin-top:0.45rem; font-size:0.78rem; color:var(--muted);">
+          CSV is compatible with Google Sheets.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="title-row">
+          <strong style="color:var(--danger);">Absent Students</strong>
+          <span id="absent-count" class="pill">0</span>
+        </div>
+        <div id="absent-list" class="absent-list"></div>
+      </div>
+
+      <div class="card">
+        <strong>Registered Students</strong>
+        <div id="student-gallery" class="gallery"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const FACE_MODELS_URL = "https://justadudewhohacks.github.io/face-api.js/models";
+    const FACE_MATCH_THRESHOLD = 0.5;
+
+    const video = document.getElementById("video");
+    const statusName = document.getElementById("status-name");
+    const btnIn = document.getElementById("btn-in");
+    const btnOut = document.getElementById("btn-out");
+    const btnReg = document.getElementById("btn-reg");
+    const btnDownload = document.getElementById("btn-download");
+    const logBox = document.getElementById("log");
+    const studentGallery = document.getElementById("student-gallery");
+    const attendanceTableBody = document.getElementById("attendance-table-body");
+    const dayDateDisplay = document.getElementById("current-day-date");
+    const attendanceDateSelect = document.getElementById("attendance-date-select");
+    const retentionInfo = document.getElementById("retention-info");
+    const absentList = document.getElementById("absent-list");
+    const absentCount = document.getElementById("absent-count");
+
+    let students = [];
+    let currentRecognizedName = "Unknown";
+    let recognitionBusy = false;
+    let cameraReady = false;
+    let modelsReady = false;
+
+    function setLog(message) {
+      logBox.textContent = message;
+    }
+
+    function updateDisplayDate() {
+      const now = new Date();
+      dayDateDisplay.textContent = now.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    function setRecognizedName(name) {
+      currentRecognizedName = name || "Unknown";
+      statusName.textContent = currentRecognizedName;
+
+      if (currentRecognizedName === "Unknown") {
+        statusName.style.color = "var(--primary)";
+        btnIn.disabled = true;
+        btnOut.disabled = true;
+      } else {
+        statusName.style.color = "var(--secondary)";
+        btnIn.disabled = false;
+        btnOut.disabled = false;
+      }
+    }
+
+    async function startCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      video.srcObject = stream;
+      await video.play();
+      cameraReady = true;
+    }
+
+    async function loadFaceModels() {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_URL);
+      modelsReady = true;
+    }
+
+    function bestStudentMatch(descriptor) {
+      if (!descriptor || students.length === 0) return null;
+
+      let best = null;
+      for (const student of students) {
+        if (!Array.isArray(student.descriptor) || student.descriptor.length === 0) continue;
+
+        const distance = faceapi.euclideanDistance(descriptor, student.descriptor);
+        if (!best || distance < best.distance) {
+          best = { student, distance };
+        }
+      }
+
+      if (!best || best.distance > FACE_MATCH_THRESHOLD) return null;
+      return best.student;
+    }
+
+    async function runRecognition() {
+      if (recognitionBusy || !cameraReady || !modelsReady) return;
+      recognitionBusy = true;
+
+      try {
+        const detection = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!detection || !detection.descriptor) {
+          setRecognizedName("Unknown");
+          return;
+        }
+
+        const descriptor = Array.from(detection.descriptor);
+        const match = bestStudentMatch(descriptor);
+        setRecognizedName(match ? match.name : "Unknown");
+      } catch (error) {
+        console.error("recognition error:", error);
+      } finally {
+        recognitionBusy = false;
+      }
+    }
+
+    function makeStudentCard(student) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "student";
+
+      const img = document.createElement("img");
+      img.src = student.imageUrl || "";
+      img.alt = student.name;
+      wrapper.appendChild(img);
+
+      const name = document.createElement("div");
+      name.className = "student-name";
+      name.textContent = student.name;
+      wrapper.appendChild(name);
+
+      const actions = document.createElement("div");
+      actions.className = "student-actions";
+
+      const editButton = document.createElement("button");
+      editButton.className = "btn-edit";
+      editButton.type = "button";
+      editButton.textContent = "Edit";
+      editButton.addEventListener("click", () => renameStudent(student.name));
+      actions.appendChild(editButton);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "btn-delete";
+      deleteButton.type = "button";
+      deleteButton.textContent = "Delete";
+      deleteButton.addEventListener("click", () => removeStudent(student.name));
+      actions.appendChild(deleteButton);
+
+      wrapper.appendChild(actions);
+      return wrapper;
+    }
+
+    async function fetchStudents() {
+      const response = await fetch("/api/students");
+      if (!response.ok) throw new Error("Failed to fetch students");
+
+      const data = await response.json();
+      students = (data.students || []).map((student) => ({
+        ...student,
+        descriptor: Array.isArray(student.descriptor)
+          ? student.descriptor.map((value) => Number(value))
+          : [],
+      }));
+
+      studentGallery.innerHTML = "";
+      for (const student of students) {
+        studentGallery.appendChild(makeStudentCard(student));
+      }
+    }
+
+    function renderAbsentNames(absentNames) {
+      absentList.innerHTML = "";
+      absentCount.textContent = String(absentNames.length);
+
+      if (absentNames.length === 0) {
+        const ok = document.createElement("span");
+        ok.className = "pill";
+        ok.style.background = "#dcfce7";
+        ok.style.color = "#166534";
+        ok.textContent = "Everyone is present";
+        absentList.appendChild(ok);
+        return;
+      }
+
+      absentNames.forEach((name) => {
+        const chip = document.createElement("span");
+        chip.className = "pill";
+        chip.textContent = name;
+        absentList.appendChild(chip);
+      });
+    }
+
+    function renderAttendanceTable(records) {
+      attendanceTableBody.innerHTML = "";
+      if (!Array.isArray(records) || records.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.style.textAlign = "center";
+        td.style.color = "#94a3b8";
+        td.textContent = "No records yet today";
+        tr.appendChild(td);
+        attendanceTableBody.appendChild(tr);
+        return;
+      }
+
+      const reversed = [...records].reverse();
+      reversed.forEach((row, index) => {
+        const tr = document.createElement("tr");
+        const indexTd = document.createElement("td");
+        indexTd.textContent = String(reversed.length - index);
+        indexTd.style.color = "#94a3b8";
+        tr.appendChild(indexTd);
+
+        const nameTd = document.createElement("td");
+        nameTd.textContent = row.Name || "";
+        nameTd.style.fontWeight = "700";
+        tr.appendChild(nameTd);
+
+        const inTd = document.createElement("td");
+        inTd.textContent = row["Clock-In"] || "--";
+        tr.appendChild(inTd);
+
+        const outTd = document.createElement("td");
+        outTd.textContent = row["Clock-Out"] || "--";
+        tr.appendChild(outTd);
+
+        attendanceTableBody.appendChild(tr);
+      });
+    }
+
+    async function fetchAttendance() {
+      const response = await fetch("/api/attendance");
+      if (!response.ok) throw new Error("Failed to fetch attendance");
+
+      const data = await response.json();
+      document.getElementById("stat-registered").textContent = String(data.stats.total_registered || 0);
+      document.getElementById("stat-present").textContent = String(data.stats.total_present || 0);
+      document.getElementById("stat-percentage").textContent = `${data.stats.percentage || 0}%`;
+
+      renderAttendanceTable(data.records || []);
+      renderAbsentNames(data.absent_names || []);
+    }
+
+    function formatDateLabel(dateStr) {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      if (!year || !month || !day) return dateStr;
+      return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    async function fetchAttendanceFiles() {
+      const response = await fetch("/api/attendance/files");
+      if (!response.ok) throw new Error("Failed to fetch attendance files");
+
+      const data = await response.json();
+      const files = data.files || [];
+      const previousDate = attendanceDateSelect.value;
+      retentionInfo.textContent = `Last ${data.retentionDays || 15} days`;
+
+      attendanceDateSelect.innerHTML = "";
+      if (files.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No attendance files found";
+        attendanceDateSelect.appendChild(option);
+        btnDownload.disabled = true;
+        return;
+      }
+
+      files.forEach((file) => {
+        const option = document.createElement("option");
+        option.value = file.date;
+        option.textContent = `${formatDateLabel(file.date)} (${file.filename})`;
+        attendanceDateSelect.appendChild(option);
+      });
+
+      const stillExists = files.some((file) => file.date === previousDate);
+      attendanceDateSelect.value = stillExists ? previousDate : files[0].date;
+      btnDownload.disabled = false;
+    }
+
+    async function apiPost(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+
+      const data = await response.json();
+      return { response, data };
+    }
+
+    async function performAttendanceAction(type, override = false) {
+      if (!currentRecognizedName || currentRecognizedName === "Unknown") {
+        setLog("No recognized face.");
+        return;
+      }
+
+      const endpoint = type === "clock_in" ? "/api/attendance/clock-in" : "/api/attendance/clock-out";
+      setLog(`${override ? "Overriding" : "Logging"} ${type.replace("_", " ")} for ${currentRecognizedName}...`);
+
+      const { response, data } = await apiPost(endpoint, {
+        name: currentRecognizedName,
+        override,
+      });
+
+      if (!response.ok) {
+        if (data.is_conflict) {
+          const shouldOverride = confirm(`${data.message}\n\nOverride with current time?`);
+          if (shouldOverride) {
+            return performAttendanceAction(type, true);
+          }
+        }
+        setLog(data.message || "Attendance action failed.");
+        return;
+      }
+
+      setLog(data.message);
+      await fetchAttendance();
+      await fetchAttendanceFiles();
+    }
+
+    async function captureCurrentFacePayload() {
+      const detection = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection || !detection.descriptor) {
+        return null;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      return {
+        descriptor: Array.from(detection.descriptor),
+        imageDataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      };
+    }
+
+    async function registerStudent() {
+      const name = prompt("Enter student full name:");
+      if (!name) return;
+
+      setLog("Capturing face for registration...");
+      const payload = await captureCurrentFacePayload();
+      if (!payload) {
+        setLog("No face detected. Please face the camera and try again.");
+        return;
+      }
+
+      const { response, data } = await apiPost("/api/students/register", {
+        name,
+        imageDataUrl: payload.imageDataUrl,
+        descriptor: payload.descriptor,
+      });
+
+      setLog(data.message || "Registration request completed.");
+      if (!response.ok) return;
+
+      await fetchStudents();
+      await fetchAttendance();
+      await fetchAttendanceFiles();
+    }
+
+    async function renameStudent(oldName) {
+      const newName = prompt(`Rename "${oldName}" to:`, oldName);
+      if (!newName || newName === oldName) return;
+
+      const { response, data } = await apiPost("/api/students/rename", {
+        oldName,
+        newName,
+      });
+      setLog(data.message || "Rename completed.");
+      if (!response.ok) return;
+
+      await fetchStudents();
+      await fetchAttendance();
+    }
+
+    async function removeStudent(name) {
+      if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+
+      const { response, data } = await apiPost("/api/students/delete", { name });
+      setLog(data.message || "Delete completed.");
+      if (!response.ok) return;
+
+      await fetchStudents();
+      await fetchAttendance();
+      await fetchAttendanceFiles();
+    }
+
+    function downloadSelectedFile() {
+      const date = attendanceDateSelect.value;
+      if (!date) {
+        setLog("No attendance file selected.");
+        return;
+      }
+      setLog(`Downloading attendance for ${date}...`);
+      window.location.href = `/api/attendance/download?date=${encodeURIComponent(date)}`;
+    }
+
+    async function bootstrap() {
+      updateDisplayDate();
+      setRecognizedName("Unknown");
+
+      try {
+        setLog("Loading face models...");
+        await loadFaceModels();
+        setLog("Starting camera...");
+        await startCamera();
+        setLog("Loading students and attendance...");
+
+        await fetchStudents();
+        await fetchAttendance();
+        await fetchAttendanceFiles();
+
+        setInterval(runRecognition, 1000);
+        setInterval(async () => {
+          try {
+            await fetchAttendance();
+          } catch (error) {
+            console.error(error);
+          }
+        }, 5000);
+        setInterval(async () => {
+          try {
+            await fetchAttendanceFiles();
+          } catch (error) {
+            console.error(error);
+          }
+        }, 30000);
+
+        setLog("System ready.");
+      } catch (error) {
+        console.error(error);
+        setLog(`Initialization failed: ${error.message}`);
+      }
+    }
+
+    btnIn.addEventListener("click", () => performAttendanceAction("clock_in"));
+    btnOut.addEventListener("click", () => performAttendanceAction("clock_out"));
+    btnReg.addEventListener("click", registerStudent);
+    btnDownload.addEventListener("click", downloadSelectedFile);
+
+    bootstrap();
+  </script>
+</body>
+</html>

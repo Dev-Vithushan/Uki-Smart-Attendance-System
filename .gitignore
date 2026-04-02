@@ -1,0 +1,16 @@
+# Python local runtime
+venv/
+__pycache__/
+*.pyc
+
+# Local attendance artifacts
+attendance_logs/
+known_faces/
+students_master.csv
+
+# Node / Vercel
+node_modules/
+.vercel/
+.env
+.env.local
+.vercel

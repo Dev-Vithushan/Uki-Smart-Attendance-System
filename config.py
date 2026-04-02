@@ -15,3 +15,6 @@ os.makedirs(ATTENDANCE_LOG_DIR, exist_ok=True)
 # Application settings
 WINDOW_TITLE = "FaceFind Attendance System"
 WINDOW_GEOMETRY = "800x650"
+
+# Attendance retention
+LOG_RETENTION_DAYS = 15

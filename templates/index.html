@@ -174,6 +174,37 @@
             padding: 5px;
         }
 
+        .download-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .download-controls select {
+            flex: 1;
+            min-width: 180px;
+            padding: 0.65rem 0.75rem;
+            border: 1px solid #D1D5DB;
+            border-radius: 0.6rem;
+            font-family: inherit;
+            font-size: 0.9rem;
+            background: #FFFFFF;
+            color: #111827;
+        }
+
+        .btn-download {
+            padding: 0.7rem 1rem;
+            font-size: 0.85rem;
+            border-radius: 0.6rem;
+            background-color: #0EA5E9;
+        }
+
+        .btn-download:hover:not(:disabled) {
+            background-color: #0284C7;
+            transform: translateY(-1px);
+        }
+
         @media (max-width: 900px) {
             .container { grid-template-columns: 1fr; }
         }
@@ -255,6 +286,20 @@
                 </div>
             </div>
 
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem;">📥 Download Attendance</strong>
+                    <span id="retention-info" style="font-size: 0.75rem; color: #6B7280; font-weight: 600;">Last 15 days</span>
+                </div>
+                <div class="download-controls">
+                    <select id="attendance-date-select"></select>
+                    <button id="btn-download-attendance" class="btn-download" onclick="downloadSelectedAttendance()" disabled>⬇️ Download CSV</button>
+                </div>
+                <div style="margin-top: 8px; font-size: 0.78rem; color: #6B7280;">
+                    Google Sheets compatible CSV export
+                </div>
+            </div>
+
             <!-- Absent Students Card (MOVED TO BOTTOM) -->
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -283,6 +328,9 @@
         const studentGallery = document.getElementById('student-gallery');
         const attendanceTableBody = document.getElementById('attendance-table-body');
         const dayDateDisplay = document.getElementById('current-day-date');
+        const attendanceDateSelect = document.getElementById('attendance-date-select');
+        const downloadAttendanceBtn = document.getElementById('btn-download-attendance');
+        const retentionInfo = document.getElementById('retention-info');
 
         // Show Current Day and Date
         function updateDisplayDate() {
@@ -295,6 +343,65 @@
         // Initial fetch
         fetchStudents();
         fetchAttendance();
+        fetchAttendanceFiles();
+
+        function formatDateLabel(dateStr) {
+            const parts = dateStr.split('-').map(Number);
+            if (parts.length !== 3 || parts.some(Number.isNaN)) return dateStr;
+
+            const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+            return dateObj.toLocaleDateString('en-US', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        async function fetchAttendanceFiles() {
+            try {
+                const res = await fetch('/attendance_files');
+                const data = await res.json();
+                const files = data.files || [];
+                const previousValue = attendanceDateSelect.value;
+
+                retentionInfo.innerText = `Last ${data.retention_days || 15} days`;
+                attendanceDateSelect.innerHTML = '';
+
+                if (files.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = 'No attendance files available';
+                    attendanceDateSelect.appendChild(opt);
+                    downloadAttendanceBtn.disabled = true;
+                    return;
+                }
+
+                files.forEach(file => {
+                    const opt = document.createElement('option');
+                    opt.value = file.date;
+                    opt.textContent = `${formatDateLabel(file.date)} (${file.filename})`;
+                    attendanceDateSelect.appendChild(opt);
+                });
+
+                const hasPrevious = files.some(file => file.date === previousValue);
+                attendanceDateSelect.value = hasPrevious ? previousValue : files[0].date;
+                downloadAttendanceBtn.disabled = false;
+            } catch (e) {
+                console.error("Failed to fetch attendance files");
+            }
+        }
+
+        function downloadSelectedAttendance() {
+            const selectedDate = attendanceDateSelect.value;
+            if (!selectedDate) {
+                log.innerText = "No attendance file selected.";
+                return;
+            }
+
+            log.innerText = `Downloading attendance for ${selectedDate}...`;
+            window.location.href = `/download_attendance?date=${encodeURIComponent(selectedDate)}`;
+        }
 
         async function fetchStudents() {
             try {
@@ -429,6 +536,7 @@
 
         // Fetch attendance periodically
         setInterval(fetchAttendance, 5000);
+        setInterval(fetchAttendanceFiles, 30000);
 
         async function action(type, override = false) {
             const currentName = statusName.innerText;
@@ -448,7 +556,10 @@
             }
             
             log.innerText = data.message;
-            if (data.success) fetchAttendance();
+            if (data.success) {
+                fetchAttendance();
+                fetchAttendanceFiles();
+            }
         }
 
         async function register() {
@@ -466,6 +577,7 @@
             if (data.success) {
                 fetchStudents();
                 fetchAttendance();
+                fetchAttendanceFiles();
             }
         }
     </script>

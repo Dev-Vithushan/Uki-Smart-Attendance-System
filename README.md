@@ -2,14 +2,68 @@
 
 Welcome to the **Uki Smart Attendance System**. This is a production-ready, face-recognition-based attendance monitoring dashboard designed for macOS and Linux.
 
+## ☁️ Vercel Stateless Version (No DB)
+
+This repo now includes a **full Vercel architecture** that does not require a database.
+
+- Face recognition runs in the **browser** (client-side with `face-api.js`)
+- Backend runs as **Vercel serverless API functions**
+- Data is stored as files in **Vercel Blob**:
+  - `students/master.json`
+  - `students/images/<student-id>.jpg`
+  - `attendance/attendance_YYYY-MM-DD.csv`
+- CSV download is available from the UI
+- Old attendance files are auto-deleted after 15 days (cron + runtime cleanup)
+
+### Required Environment Variables (Vercel)
+
+1. `BLOB_READ_WRITE_TOKEN` (required)
+2. `LOG_RETENTION_DAYS` (optional, default `15`)
+3. `APP_TIMEZONE` (optional, default `Asia/Colombo`)
+4. `FACE_MATCH_THRESHOLD` (optional, default `0.5`)
+5. `CRON_SECRET` (recommended for `/api/cron/cleanup`)
+
+### Deploy Steps
+
+```bash
+# Install Node dependencies
+npm install
+
+# Local dev (optional)
+vercel dev
+
+# Deploy
+vercel --prod
+```
+
+> [!IMPORTANT]
+> This Vercel version uses file storage (Blob) instead of local filesystem.
+> It is stateless and safe for Vercel serverless runtime.
+
+### Vercel API Routes
+
+- `GET /api/health`
+- `GET /api/students`
+- `POST /api/students/register`
+- `POST /api/students/rename`
+- `POST /api/students/delete`
+- `GET /api/attendance`
+- `POST /api/attendance/clock-in`
+- `POST /api/attendance/clock-out`
+- `GET /api/attendance/files`
+- `GET /api/attendance/download?date=YYYY-MM-DD`
+- `GET|POST /api/cron/cleanup`
+
 ## 🚀 Key Features
 
 - **🖼️ Real-Time Face Recognition**: Continuous camera monitoring with synchronized registration.
 - **📊 Live Analytics Dashboard**: Real-time tracking of **Registered Students**, **Present Count**, and **Attendance Percentage**.
 - **🚩 Smart Absent Tracker**: Automatically calculates and lists students who haven't clocked in for the day.
 - **📂 Professional Logging**: Attendance files are organized into **Monthly Subfolders** (e.g., `attendance_logs/March/`).
+- **📥 Lecturer CSV Download**: Dashboard includes date-wise CSV export (Google Sheets compatible).
 - **🗂️ Master Repository**: Uses `students_master.csv` as a single source of truth for all student data, ensuring 100% data integrity.
 - **🛠️ Self-Healing Data**: Automatically restores CSV headers and synchronizes deletions across all logs.
+- **🧹 Storage Retention**: Automatically removes attendance CSV files older than 15 days.
 
 ---
 
@@ -84,6 +138,24 @@ python3 app.py
 ```
 
 Access the dashboard at: **[http://localhost:5050](http://localhost:5050)**
+
+---
+
+## 📥 Attendance Download + Retention
+
+- Use the **Download Attendance** card in the UI to select a date and download CSV.
+- The downloaded file is CSV and can be imported directly into Google Sheets.
+- The system keeps only the latest **15 days** of attendance logs.
+
+### Manual cleanup script
+
+```bash
+# Uses default retention from config.py (15 days)
+python3 cleanup_attendance_logs.py
+
+# Custom retention window
+python3 cleanup_attendance_logs.py --days 15
+```
 
 ---
 

@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+*.py
+requirements.txt
+templates/
+attendance_logs/
+known_faces/
+students_master.csv
+.git/
