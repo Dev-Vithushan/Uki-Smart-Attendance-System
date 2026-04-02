@@ -630,7 +630,7 @@
       applyAttendancePayload(data);
     }
 
-    function scheduleAttendanceResync(delayMs = 25000) {
+    function scheduleAttendanceResync(delayMs = 310000) {
       if (attendanceResyncTimer) {
         clearTimeout(attendanceResyncTimer);
       }
@@ -847,13 +847,6 @@
         await fetchAttendanceFiles();
 
         setInterval(runRecognition, 1000);
-        setInterval(async () => {
-          try {
-            await fetchAttendance();
-          } catch (error) {
-            console.error(error);
-          }
-        }, 5000);
         setInterval(async () => {
           try {
             await fetchAttendanceFiles();

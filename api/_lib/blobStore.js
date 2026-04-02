@@ -54,11 +54,14 @@ export async function putBlobText(
   text,
   contentType = "text/plain; charset=utf-8"
 ) {
+  const cacheControlMaxAge = contentType.startsWith("image/") ? 31536000 : 0;
+
   const blob = await put(pathname, text, {
     access: "public",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType,
+    cacheControlMaxAge,
   });
 
   return blob;
