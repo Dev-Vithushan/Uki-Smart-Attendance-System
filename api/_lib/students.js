@@ -128,6 +128,7 @@ export async function registerStudent({ name, imageDataUrl, descriptor }) {
     success: true,
     message: `Student ${normalizedName} registered successfully.`,
     student: getStudentPublicShape(student),
+    students: updated.map(getStudentPublicShape),
     totalRegistered: updated.length,
   };
 }
