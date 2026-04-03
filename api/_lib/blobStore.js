@@ -27,7 +27,7 @@ export async function getBlobText(pathname) {
   const blob = await findBlobByPath(pathname);
   if (!blob) return null;
 
-  const url = new URL(blob.downloadUrl || `${blob.url}?download=1`);
+  const url = new URL(blob.url);
   url.searchParams.set("_ts", Date.now().toString());
 
   const response = await fetch(url.toString(), {
